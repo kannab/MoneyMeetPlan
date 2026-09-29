@@ -1340,6 +1340,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     state.visited[state.step] = true;
     if(isRef(id) && !isRef(state.step)) refReturn = state.step;
     state.step = id; state.visited[id] = true; save(); render();
+    if(!hashDriven) syncUrl(id, false);
     try{ window.scrollTo({top:0, behavior:'auto'}); }catch(e){ window.scrollTo(0,0); }
     if(focusStep){
       var h = $('section.step[data-step="' + state.step + '"] h1');
@@ -2380,13 +2381,26 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     else if(own(DOOR_ROUTES, h)) setDoor(DOOR_ROUTES[h], false);
     if(t) setTimeout(function(){ jumpTo(t, !!fromClick, !!fromClick); }, 30);
     if(h === 'progress') openProgress(true);
+    if(fromClick && !hashDriven){ try{ history.replaceState(null, '', '#' + h); }catch(e){} }
     return true;
   }
-  function routeHash(){
+  /* the address bar follows the step, so reload, share, and Back all land where you are */
+  var hashDriven = false;
+  function syncUrl(id, replace){
+    try{
+      var cur = String(location.hash || '').replace(/^#/, '');
+      if(id === 'start' ? cur === '' : cur === id) return;
+      history[replace ? 'replaceState' : 'pushState'](null, '', id === 'start' ? location.pathname + location.search : '#' + id);
+    }catch(e){}
+  }
+  function routeHash(ev){
     var h = '';
     try{ h = decodeURIComponent(String(location.hash || '').replace(/^#/, '')).toLowerCase().trim(); }catch(e){ return; }
-    if(!h) return;
-    routeTo(h, false);
+    hashDriven = true;
+    try{
+      if(!h){ if(ev && state.step !== 'start') go('start', false); return; } /* Back to the plain address means Start */
+      routeTo(h, false);
+    } finally { hashDriven = false; }
   }
 
   /* open the Start page with the checkup ready, and land on its heading */
@@ -3020,5 +3034,6 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   backfillReview();
   render();
   routeHash();
+  if(!location.hash) syncUrl(state.step, true); /* a returning visitor's saved step shows in the address too */
   window.addEventListener('hashchange', routeHash);
 })();
