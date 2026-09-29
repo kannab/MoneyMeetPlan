@@ -1092,25 +1092,53 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   /* five phases, so a long setup reads as a few stretches instead of a long list of steps */
   var PHASES = {start:'Get ready', lockdown:'Prepare safely', household:'Set up your AI', kickoff:'Build the plan', running:'Keep it current'};
   function phaseOf(id){ var ph = PHASES.start, done = false; STEPS.forEach(function(x){ if(done) return; if(PHASES[x.id]) ph = PHASES[x.id]; if(x.id === id) done = true; }); return ph; }
+  /* a tick means done: the work steps when their "done when" is met, the reading steps once read */
+  function stepDone(id){
+    if(id === 'lockdown'){ var all = lockItems().filter(function(it){ return !lockNa(it.id); }); return all.length > 0 && all.every(function(it){ return !!state.lock[it.id]; }); }
+    if(id === 'gather'){ var t = 0, n = 0; CHECKS.forEach(function(g, gi){ g.items.forEach(function(it, ii){ t++; if(state.checks[gi + '-' + ii]) n++; }); }); return t > 0 && n === t; }
+    if(id === 'create') return !!(state.done.setup_home && state.done.setup_review);
+    if(id === 'kickoff'){ var core = sessions().filter(function(x){ return !x.optional; }); return !!state.done.setup_tests && core.every(function(x){ return !!state.done['s_' + x.key]; }); }
+    return !!state.visited[id] && id !== state.step;
+  }
   function renderRail(){
     var vs = visibleSteps(), rail = $('#rail'); rail.innerHTML = '';
     vs.forEach(function(s, i){
       if(PHASES[s.id]){ var ph = document.createElement('p'); ph.className = 'rail-phase'; ph.textContent = PHASES[s.id]; rail.appendChild(ph); }
       var b = document.createElement('button'); b.type = 'button';
-      var done = state.visited[s.id] && s.id !== state.step;
-      b.innerHTML = '<span class="n" aria-hidden="true">' + (i+1) + '</span><span class="visually-hidden">' + (i+1) + '. </span><span>' + esc(s.label) + '</span>' + (done ? '<span class="visually-hidden">, visited</span>' : '');
+      var done = stepDone(s.id), started = !done && !!state.visited[s.id] && s.id !== state.step;
+      b.innerHTML = '<span class="n" aria-hidden="true">' + (done ? ico('i-check') : (i+1)) + '</span><span class="visually-hidden">' + (i+1) + '. </span><span>' + esc(s.label) + '</span>' + (done ? '<span class="visually-hidden">, done</span>' : started ? '<span class="visually-hidden">, started</span>' : '');
       if(s.id === state.step) b.setAttribute('aria-current', 'step');
-      if(done) b.classList.add('done');
+      if(done) b.classList.add('done'); else if(started) b.classList.add('started');
       b.addEventListener('click', function(){ go(s.id, true); });
       rail.appendChild(b);
+      /* Kickoff is several sittings: while you're in it, its tests and sessions list under it */
+      if(s.id === 'kickoff' && state.step === 'kickoff'){
+        var sub = document.createElement('div'); sub.className = 'rail-sub'; sub.setAttribute('role', 'group'); sub.setAttribute('aria-label', 'Kickoff sessions');
+        var k = 0, items = [{at:'#tests', label:'Two short tests', done:!!state.done.setup_tests}];
+        sessions().forEach(function(x){ items.push({at:'#pc_' + x.key, label:(x.optional ? 'Optional · ' : 'Session ' + (++k) + ' · ') + x.title, done:!!state.done['s_' + x.key]}); });
+        sub.innerHTML = items.map(function(it){ return '<button type="button" data-jump="' + it.at + '"' + (it.done ? ' class="done"' : '') + '><span class="sub-dot" aria-hidden="true">' + (it.done ? ico('i-check') : '') + '</span><span class="sub-t">' + esc(it.label) + '</span>' + (it.done ? '<span class="visually-hidden">, done</span>' : '') + '</button>'; }).join('');
+        rail.appendChild(sub);
+      }
     });
     var onRef = isRef(state.step), placeId = onRef ? refReturn : state.step, idx = stepIndex(placeId);
     var curStep = STEPS.filter(function(x){ return x.id === state.step; })[0];
-    $('#progressText').innerHTML = onRef ? esc(curStep.label) : '<span class="pt-step">Step </span>' + (idx+1) + ' of ' + vs.length + '<span class="pt-phase"> · ' + esc(phaseOf(state.step)) + '</span>';
-    $$('[data-route="library"]').forEach(function(a){ if(onRef && state.step === 'library') a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-    /* the bar is a map of the five phases, filled up to where you are; it is position, not a score */
     var segs = [];
     vs.forEach(function(s, i){ if(PHASES[s.id] || !segs.length) segs.push({start:i, n:0}); segs[segs.length-1].n++; });
+    var pi = 0; segs.forEach(function(g, j){ if(idx >= g.start) pi = j; });
+    $('#progressText').innerHTML = onRef ? esc(curStep.label) : '<span class="pt-step">Phase </span>' + (pi+1) + ' of ' + segs.length + '<span class="pt-phase"> · ' + esc(phaseOf(placeId)) + '</span>';
+    /* phones: one bar that says where you are, with previous, next, and the full list */
+    var mp = $('#mnavPhase'), ms = $('#mnavStep');
+    if(mp && ms){
+      mp.textContent = onRef ? 'Reference' : phaseOf(placeId);
+      ms.textContent = onRef ? curStep.label : (idx - segs[pi].start + 1) + ' of ' + segs[pi].n + ': ' + vs[idx].label;
+      var pv = $('#mnavPrev'), nx = $('#mnavNext');
+      pv.disabled = !onRef && idx === 0; nx.disabled = onRef || idx === vs.length - 1;
+      pv.setAttribute('aria-label', onRef ? 'Back to ' + ((STEPS.filter(function(x){ return x.id === refReturn; })[0] || {}).label || 'the guide') : (idx > 0 ? 'Previous step: ' + vs[idx-1].label : 'Previous step'));
+      nx.setAttribute('aria-label', !onRef && idx < vs.length - 1 ? 'Next step: ' + vs[idx+1].label : 'Next step');
+      $('#mnavCur').setAttribute('aria-label', (onRef ? curStep.label : phaseOf(placeId) + ', step ' + (idx+1) + ' of ' + vs.length + ': ' + vs[idx].label) + '. Show all steps');
+    }
+    $$('[data-route="library"]').forEach(function(a){ if(onRef && state.step === 'library') a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    /* the bar is a map of the five phases, filled up to where you are; it is position, not a score */
     $('#progressBar').innerHTML = segs.map(function(g){ var f = Math.max(0, Math.min(1, (idx + 1 - g.start) / g.n)); return '<span class="seg" style="flex:' + g.n + '"><i style="width:' + Math.round(f*100) + '%"></i></span>'; }).join('');
     var meter = $('#progressMeter');
     if(meter){ meter.setAttribute('aria-valuemax', vs.length); meter.setAttribute('aria-valuenow', idx+1); meter.setAttribute('aria-valuetext', (onRef ? curStep.label + '. Your place in the guide: ' : '') + 'Step ' + (idx+1) + ' of ' + vs.length + ', ' + phaseOf(placeId) + ': ' + ((vs[idx] && vs[idx].label) || '')); }
@@ -1120,8 +1148,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     if(typeof syncTopbar === 'function') syncTopbar();
     try{
       var cur = rail.querySelector('[aria-current="step"]');
-      if(cur && window.innerWidth <= 880){ var rr = rail.getBoundingClientRect(), cr = cur.getBoundingClientRect(); rail.scrollLeft += (cr.left + cr.width / 2) - (rr.left + rr.width / 2); }
-      else if(cur && rail.scrollHeight > rail.clientHeight + 2){
+      if(cur && rail.scrollHeight > rail.clientHeight + 2){
         /* on a short screen the step list scrolls on its own; keep the current step in view */
         if(cur.offsetTop < rail.scrollTop + 8) rail.scrollTop = Math.max(0, cur.offsetTop - 40);
         else if(cur.offsetTop + cur.offsetHeight > rail.scrollTop + rail.clientHeight - 8) rail.scrollTop = cur.offsetTop + cur.offsetHeight - rail.clientHeight + 40;
@@ -1334,8 +1361,13 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     renderAi(); renderRail(); renderEyebrows(); renderStepRefs(); renderStart(); renderChecklists(); renderHousehold(); renderGenerated(); renderKickoff(); renderReviewStep(); renderRhythm(); renderLibrary(); renderThanks(); renderCalcs(); renderNews(); renderProgress(); updateProgress(); updateLock();
   }
 
+  function setRailOpen(open, focusCur){
+    var r = $('#rail'), b = $('#mnavCur'); if(!r || !b) return;
+    r.classList.toggle('open', !!open); b.setAttribute('aria-expanded', open ? 'true' : 'false'); document.body.classList.toggle('rail-open', !!open);
+    if(open && focusCur){ var c = r.querySelector('[aria-current="step"]') || r.querySelector('button'); if(c){ try{ c.focus({preventScroll:true}); c.scrollIntoView({block:'nearest'}); }catch(e){} } }
+  }
   function go(id, focusStep){
-    hideTerm(); setPanel(false);
+    hideTerm(); setPanel(false); setRailOpen(false);
     if(id !== 'start'){ aiAskOpen = false; aiReturn = ''; aiPendingDoor = ''; }
     state.visited[state.step] = true;
     if(isRef(id) && !isRef(state.step)) refReturn = state.step;
@@ -1637,7 +1669,16 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     $$('input[data-done]').forEach(function(inp){ inp.checked = !!state.done[inp.getAttribute('data-done')]; });
     updateReviews();
     var kn = $('#kickNext');
-    if(kn){ var ks = progressStats().next; var on = !!ks && ks.step === 'kickoff' && !!ks.at; kn.hidden = !on; if(on){ $('#kickNextText').textContent = ks.text; $('#kickNextGo').setAttribute('data-jump', ks.at); } }
+    if(kn){
+      var ks = progressStats().next, fin = stepDone('kickoff'), on = fin || (!!ks && ks.step === 'kickoff' && !!ks.at), kg = $('#kickNextGo');
+      kn.hidden = !on; kn.classList.toggle('finished', fin);
+      if(on){
+        $('#kickNextLabel').textContent = fin ? 'You have a written plan' : 'Next step';
+        $('#kickNextText').textContent = fin ? 'Every core session is done. Next, keep it running with short check-ins.' : ks.text;
+        if(fin){ kg.removeAttribute('data-jump'); kg.setAttribute('data-route', 'running'); } else { kg.removeAttribute('data-route'); kg.setAttribute('data-jump', ks.at); }
+      }
+    }
+    if($('#rail')) renderRail(); /* ticks in the step list follow the work as it's done */
     var pp = $('#progressPanel'); if(!pp || pp.hidden || !pp.childElementCount) return;
     var st = progressStats();
     var put = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; };
@@ -2271,7 +2312,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   window.addEventListener('resize', function(){ syncTopbar(); if(window.innerWidth !== lastW){ lastW = window.innerWidth; hideTerm(); } });
 
   /* share a section: a fixed public link, never anything the visitor typed */
-  var SHARE_BASE = 'https://moneymeetplan.com/';
+  var SHARE_BASE = /^https?:$/.test(location.protocol) ? location.origin + location.pathname.replace(/index\.html$/, '') : 'https://moneymeetplan.com/'; /* the guide's own address, never anything typed */
   var SHARE_TEXT = {checkup:'A free 15-minute money checkup you can run with Claude, ChatGPT, Gemini, or Copilot, even on a free plan.', benefits:'A free, plain-English guide to workplace benefits: the order to fill your 401(k), HSA, and IRA, with 2026 limits.'};
   function shareDone(b, label){ announce(label + '.'); var old = b.getAttribute('data-html') || b.innerHTML; b.setAttribute('data-html', old); b.innerHTML = ico('i-check') + label; setTimeout(function(){ b.innerHTML = old; }, 2000); }
   function shareFallback(b, url){
@@ -2327,9 +2368,10 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     var d = el.tagName === 'DETAILS' ? el : (el.classList && el.classList.contains('bucket') ? el.querySelector('details') : null);
     if(d) d.open = true;
     for(var up = el.parentElement; up; up = up.parentElement){ if(up.tagName === 'DETAILS') up.open = true; } /* folded reference sections open on the way in */
-    var reduce = false; try{ reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
     var to = el.id === 'startTitle' ? document.documentElement : el; /* Back to the top: the very top of the page */
-    try{ to.scrollIntoView({block:'start', behavior:(smooth && !reduce) ? 'smooth' : 'auto'}); }catch(e){ try{ to.scrollIntoView(); }catch(x){} }
+    /* land instantly, then mark the spot, so a jump never feels like being dropped somewhere random */
+    try{ to.scrollIntoView({block:'start', behavior:'auto'}); }catch(e){ try{ to.scrollIntoView(); }catch(x){} }
+    if(to !== document.documentElement){ var mark = d ? d : el; mark.classList.remove('landed'); void mark.offsetWidth; mark.classList.add('landed'); setTimeout(function(){ mark.classList.remove('landed'); }, 1700); }
     var f = d ? d.querySelector('summary') : (/^H[1-6]$/.test(el.tagName) ? el : el.querySelector('h2,h3,h4'));
     if(f && focus){ if(/^H[1-6]$/.test(f.tagName) && !f.hasAttribute('tabindex')) f.setAttribute('tabindex', '-1'); try{ f.focus({preventScroll:true}); }catch(e){} }
   }
@@ -3032,6 +3074,11 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   normalizeCalc(state);
   if(!isReturning()) state.newsSeen = NEWS_ID;
   backfillReview();
+  $('#mnavCur').addEventListener('click', function(){ setRailOpen(!$('#rail').classList.contains('open'), true); });
+  $('#rail').addEventListener('click', function(e){ if(e.target.closest('.rail-sub button')) setRailOpen(false); });
+  document.addEventListener('click', function(e){ var r = $('#rail'); if(r.classList.contains('open') && !e.target.closest('#rail, #mnavCur')) setRailOpen(false); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && $('#rail').classList.contains('open')){ setRailOpen(false); try{ $('#mnavCur').focus(); }catch(x){} } });
+  window.addEventListener('resize', function(){ if(window.innerWidth > 880 && $('#rail').classList.contains('open')) setRailOpen(false); });
   render();
   routeHash();
   if(!location.hash) syncUrl(state.step, true); /* a returning visitor's saved step shows in the address too */
