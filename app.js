@@ -5,19 +5,19 @@
   var VERSION = 'v2026.09';
   var STEPS = [
     {id:'start', label:'Start'},
-    {id:'primer', label:'Basics'},
+    {id:'primer', label:'Money basics'},
     {id:'trust', label:'Trust'},
     {id:'lockdown', label:'Lock down', optional:true},
     {id:'gather', label:'Gather'},
     {id:'redact', label:'Redact'},
     {id:'household', label:'Household'},
     {id:'instructions', label:'Instructions'},
-    {id:'create', label:'Create'},
+    {id:'create', label:'Set up projects'},
     {id:'kickoff', label:'Kickoff'},
-    {id:'rules', label:'Rules', fullOnly:true},
-    {id:'review', label:'Reviews'},
-    {id:'running', label:'Keep going'},
-    {id:'library', label:'Library'},
+    {id:'rules', label:'Rules of the road', fullOnly:true},
+    {id:'review', label:'Fresh-eyes reviews'},
+    {id:'running', label:'Keep it running'},
+    {id:'library', label:'Money basics library', ref:true}, /* reference: reachable from the footer, not a numbered step */
     {id:'thanks', label:'Thanks', optional:true}
   ];
 
@@ -317,7 +317,9 @@
   function clean(x){ return String(x == null ? '' : x).trim().replace(/[\s.;,]+$/,''); }
   function has(x){ return clean(x).length > 0; }
   function isFull(){ return state.path === 'full'; }
-  function visibleSteps(){ return STEPS.filter(function(s){ return !s.fullOnly || isFull(); }); }
+  function visibleSteps(){ return STEPS.filter(function(s){ return !s.ref && (!s.fullOnly || isFull()); }); }
+  function isRef(id){ return STEPS.some(function(s){ return s.id === id && s.ref; }); }
+  var refReturn = 'running'; /* where Back goes from a reference page */
   function stepIndex(id){ var vs = visibleSteps(); for(var i=0;i<vs.length;i++) if(vs[i].id===id) return i; return 0; }
   function nameOf(){ return clean(state.form.name) || '[your first name]'; }
   function possessive(n){ return n + (/s$/i.test(n) ? '’' : '’s'); }
@@ -765,7 +767,7 @@ Read 05-Open-Items and 04-Action-Plan. What's open, ranked by urgency? Does anyt
     $$('.pitfalls > div > b:first-child').forEach(function(b){ if(!b.querySelector('.ico')) b.insertAdjacentHTML('afterbegin', ico('i-alert')); });
     $$('.lane').forEach(function(l){ if(l.querySelector('.ico')) return; l.insertAdjacentHTML('afterbegin', ico(l.classList.contains('home') ? 'i-household' : l.classList.contains('rev') ? 'i-search' : 'i-user')); });
     $$('.tag').forEach(function(t){ if(t.querySelector('.ico')) return; var id = t.classList.contains('keep') ? 'i-check' : t.classList.contains('hold') ? 'i-eyeoff' : t.classList.contains('reject') ? 'i-x' : ''; if(id) t.insertAdjacentHTML('afterbegin', ico(id)); });
-    $$('.card h4').forEach(function(h){ if(h.querySelector('.ico')) return; var t = h.textContent.trim(); if(t === 'Do') h.insertAdjacentHTML('afterbegin', ico('i-check')); if(t === 'Avoid') h.insertAdjacentHTML('afterbegin', ico('i-x').replace('class="ico"', 'class="ico warm"')); });
+    $$('.card h4, .card .h4').forEach(function(h){ if(h.querySelector('.ico')) return; var t = h.textContent.trim(); if(t === 'Do') h.insertAdjacentHTML('afterbegin', ico('i-check')); if(t === 'Avoid') h.insertAdjacentHTML('afterbegin', ico('i-x').replace('class="ico"', 'class="ico warm"')); });
     $$('.platform .badge').forEach(function(b){ if(b.querySelector('.ico')) return; var t = b.textContent.trim(); var id = t === 'First' ? 'i-gear' : t === 'Project 1' ? 'i-household' : t === 'Project 2' ? 'i-search' : ''; if(id) b.insertAdjacentHTML('afterbegin', ico(id)); });
     $$('button[data-copy], #copyPlan').forEach(function(b){ if(!b.querySelector('.ico')) b.insertAdjacentHTML('afterbegin', ico('i-copy')); });
     var fl = $('#feedbackLink'); if(fl && !fl.querySelector('.ico')) fl.insertAdjacentHTML('afterbegin', ico('i-star'));
@@ -895,14 +897,14 @@ Keep it short, explain any financial term the first time you use it, and name th
     '</div></details>';
   var EXAMPLE_GATHER = '<details class="gloss sj"><summary>See what Sam and Jo gathered</summary><div class="ex">' +
     '<p class="hint">The same made-up family as the sample result on the Start page. It took them three evenings.</p>' +
-    '<h4>Had it, or typed it</h4>' +
+    '<h3 class="h4">Had it, or typed it</h3>' +
     '<ul><li>Both pay stubs, as typed summaries: gross pay, Jo’s 401(k) at ' + SJ.joNow + ' of ' + SJ.joSalary + ', the match (dollar for dollar up to ' + SJ.joTarget + '), the HSA, insurance, and a ' + SJ.volLife + '-a-month line labeled “VOL LIFE”.</li>' +
     '<li>Both Social Security statements, from ssa.gov/myaccount.</li>' +
     '<li>Statements for both current 401(k)s, the Roth IRAs, the HSA, the brokerage account, and savings.</li>' +
     '<li>An old 401(k) from Jo’s last job, found through an old HR email.</li>' +
     '<li>The mortgage and car loan statements, three months of bank and card exports (all they could download), and a list of yearly costs like insurance premiums and gifts.</li>' +
     '<li>Last year’s tax return, as a typed summary. They never uploaded the return itself.</li></ul>' +
-    '<h4>Missing, and that was fine</h4>' +
+    '<h3 class="h4">Missing, and that was fine</h3>' +
     '<ul><li>A will: they don’t have one, so they left it unticked and put it on their list of what’s missing. It went into their 90-day plan.</li>' +
     '<li>The old 401(k)’s beneficiary page: requested from the plan, and it arrived a week later.</li></ul>' +
     '<p class="hint">They started Session 1 with the gaps listed as open items, not blockers.</p>' +
@@ -1063,7 +1065,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
 
   function promptCard(o){
     var pic = o.icon || PROMPT_ICONS[o.key];
-    var h = '<div class="prompt"><div class="prompt-head"><div><h3>' + (pic ? ico(pic) : '') + '<span>' + esc(o.title) + '</span></h3>' + (o.meta ? '<div class="prompt-meta">' + esc(o.meta) + '</div>' : '') + '</div>';
+    var h = '<div class="prompt" id="pc_' + esc(o.key) + '"><div class="prompt-head"><div><h3>' + (pic ? ico(pic) : '') + '<span>' + esc(o.title) + '</span></h3>' + (o.meta ? '<div class="prompt-meta">' + esc(o.meta) + '</div>' : '') + '</div>';
     if(o.prompt) h += copyBtn('p_' + o.key);
     h += '</div><div class="prompt-body">';
     if(o.preflight) h += '<div class="preflight"><span>New chat in your household project</span><span>' + esc(aiObj().chip) + '</span></div>';
@@ -1087,7 +1089,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     return h + '</div></div>';
   }
 
-  /* five phases, so a long setup reads as a few stretches instead of fifteen steps */
+  /* five phases, so a long setup reads as a few stretches instead of a long list of steps */
   var PHASES = {start:'Get ready', lockdown:'Prepare safely', household:'Set up your AI', kickoff:'Build the plan', running:'Keep it current'};
   function phaseOf(id){ var ph = PHASES.start, done = false; STEPS.forEach(function(x){ if(done) return; if(PHASES[x.id]) ph = PHASES[x.id]; if(x.id === id) done = true; }); return ph; }
   function renderRail(){
@@ -1096,16 +1098,25 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
       if(PHASES[s.id]){ var ph = document.createElement('p'); ph.className = 'rail-phase'; ph.textContent = PHASES[s.id]; rail.appendChild(ph); }
       var b = document.createElement('button'); b.type = 'button';
       var done = state.visited[s.id] && s.id !== state.step;
-      b.innerHTML = '<span class="n" aria-hidden="true">' + (done ? '✓' : (i+1)) + '</span><span class="visually-hidden">' + (i+1) + '. </span><span>' + esc(s.label) + '</span>' + (done ? '<span class="visually-hidden">, visited</span>' : '');
+      b.innerHTML = '<span class="n" aria-hidden="true">' + (i+1) + '</span><span class="visually-hidden">' + (i+1) + '. </span><span>' + esc(s.label) + '</span>' + (done ? '<span class="visually-hidden">, visited</span>' : '');
       if(s.id === state.step) b.setAttribute('aria-current', 'step');
       if(done) b.classList.add('done');
       b.addEventListener('click', function(){ go(s.id, true); });
       rail.appendChild(b);
     });
-    var idx = stepIndex(state.step);
-    $('#progressText').innerHTML = 'Step ' + (idx+1) + ' of ' + vs.length + '<span class="pt-phase"> · ' + esc(phaseOf(state.step)) + '</span>';
-    $('#progressBar').style.width = Math.round(((idx+1)/vs.length)*100) + '%';
+    var onRef = isRef(state.step), placeId = onRef ? refReturn : state.step, idx = stepIndex(placeId);
+    var curStep = STEPS.filter(function(x){ return x.id === state.step; })[0];
+    $('#progressText').innerHTML = onRef ? esc(curStep.label) : '<span class="pt-step">Step </span>' + (idx+1) + ' of ' + vs.length + '<span class="pt-phase"> · ' + esc(phaseOf(state.step)) + '</span>';
+    $$('[data-route="library"]').forEach(function(a){ if(onRef && state.step === 'library') a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    /* the bar is a map of the five phases, filled up to where you are; it is position, not a score */
+    var segs = [];
+    vs.forEach(function(s, i){ if(PHASES[s.id] || !segs.length) segs.push({start:i, n:0}); segs[segs.length-1].n++; });
+    $('#progressBar').innerHTML = segs.map(function(g){ var f = Math.max(0, Math.min(1, (idx + 1 - g.start) / g.n)); return '<span class="seg" style="flex:' + g.n + '"><i style="width:' + Math.round(f*100) + '%"></i></span>'; }).join('');
+    var meter = $('#progressMeter');
+    if(meter){ meter.setAttribute('aria-valuemax', vs.length); meter.setAttribute('aria-valuenow', idx+1); meter.setAttribute('aria-valuetext', (onRef ? curStep.label + '. Your place in the guide: ' : '') + 'Step ' + (idx+1) + ' of ' + vs.length + ', ' + phaseOf(placeId) + ': ' + ((vs[idx] && vs[idx].label) || '')); }
+    document.title = state.step === 'start' || !curStep ? 'Money, Meet Plan' : curStep.label + ' · Money, Meet Plan';
     $('#pathChip').textContent = isFull() ? 'Full playbook' : 'Starter';
+    $('#pathChip').setAttribute('aria-label', 'Path: ' + (isFull() ? 'Full playbook' : 'Starter') + '. Change path');
     if(typeof syncTopbar === 'function') syncTopbar();
     try{
       var cur = rail.querySelector('[aria-current="step"]');
@@ -1141,7 +1152,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
       var wrap = document.createElement('div'); wrap.className = 'check-group';
       var done = 0; group.items.forEach(function(it, ii){ if(state.checks[gi+'-'+ii]) done++; });
       var gic = GROUP_ICONS[gi] || ['i-gather', 'd-sky'];
-      wrap.innerHTML = '<h3><span class="gt"><span class="gdisc ' + gic[1] + '">' + ico(gic[0]) + '</span><span>' + esc(group.title) + '</span></span><span class="count">' + done + ' of ' + group.items.length + '</span></h3>';
+      wrap.innerHTML = '<h2 class="h3"><span class="gt"><span class="gdisc ' + gic[1] + '">' + ico(gic[0]) + '</span><span>' + esc(group.title) + '</span></span><span class="count">' + done + ' of ' + group.items.length + '</span></h2>';
       group.items.forEach(function(it, ii){
         var key = gi + '-' + ii;
         var lab = document.createElement('label'); lab.className = 'check';
@@ -1186,7 +1197,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     var n = 0, html = '';
     ss.forEach(function(s){
       var title = s.optional ? 'Optional · ' + s.title : 'Session ' + (++n) + ' · ' + s.title;
-      html += promptCard({key:s.key, title:title, meta:s.time + (s.optional ? ' · any time after Session 6' : ''), preflight:true, goal:s.goal, attach:s.attach, prompt:sessionPrompt(s), done:s.done, after:doneBox('s_' + s.key, s.optional ? 'I finished this one' : 'I finished this session')});
+      html += promptCard({key:s.key, title:title, meta:s.time + (s.optional ? ' · any time after Session 6' : ''), preflight:true, goal:s.goal, attach:s.attach, prompt:sessionPrompt(s), done:s.done, after:doneBox('s_' + s.key, s.optional ? 'I finished this one' : 'I finished this session', title)});
       if(s.key === 'baseline') html += EXAMPLE_S1;
       if(s.key === 'ips') html += EXAMPLE_IPS;
       if(s.key === 'plan') html += EXAMPLE_PLAN;
@@ -1216,7 +1227,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     var host = $('#charities');
     if(host && !host.childElementCount){
       host.innerHTML = CHARITIES.map(function(c){
-        return '<div class="card charity"><h4>' + esc(c.name) + '</h4><p>' + esc(c.desc) + '</p><a class="btn small" href="' + esc(c.url) + '" target="_blank" rel="noopener noreferrer">' + esc(c.cta) + ' ↗</a></div>';
+        return '<div class="card charity"><h3 class="h4">' + esc(c.name) + '</h3><p>' + esc(c.desc) + '</p><a class="btn small" href="' + esc(c.url) + '" target="_blank" rel="noopener noreferrer">' + esc(c.cta) + ' ↗</a></div>';
       }).join('');
     }
     var live = $('#feedbackLive'), soon = $('#feedbackSoon');
@@ -1327,6 +1338,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     hideTerm(); setPanel(false);
     if(id !== 'start'){ aiAskOpen = false; aiReturn = ''; aiPendingDoor = ''; }
     state.visited[state.step] = true;
+    if(isRef(id) && !isRef(state.step)) refReturn = state.step;
     state.step = id; state.visited[id] = true; save(); render();
     try{ window.scrollTo({top:0, behavior:'auto'}); }catch(e){ window.scrollTo(0,0); }
     if(focusStep){
@@ -1419,6 +1431,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     var t = e.target.closest('[data-nav]');
     if(t){
       var vs = visibleSteps(), i = stepIndex(state.step);
+      if(isRef(state.step)){ if(t.getAttribute('data-nav') === 'prev') go(refReturn, true); return; }
       if(t.getAttribute('data-nav') === 'next' && i < vs.length - 1) go(vs[i+1].id, true);
       if(t.getAttribute('data-nav') === 'prev' && i > 0) go(vs[i-1].id, true);
       return;
@@ -1475,7 +1488,8 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     var el = document.getElementById(d.getAttribute('data-dl')); if(!el) return;
     downloadText(d.getAttribute('data-fn') || 'file.txt', el.tagName === 'TEXTAREA' ? el.value : el.textContent, d);
   });
-  $('#pathChip').addEventListener('click', function(){ state.path = isFull() ? 'starter' : 'full'; pathSwitched(); });
+  /* the path chip opens the path choice, with both options explained, instead of switching silently */
+  $('#pathChip').addEventListener('click', function(){ go('start', false); setDoor('full', false); setTimeout(function(){ jumpTo('#choosePath', true, true); }, 30); });
 
   var hf = $('#householdForm');
   hf.addEventListener('input', function(e){ var k = e.target.getAttribute('data-f'); if(k){ state.form[k] = e.target.value; save(); renderGenerated(); } });
@@ -1533,9 +1547,9 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     if(a.stage !== b.stage){ was.push('at ' + stageText(a.stage)); now.push((pathChanged ? 'at ' : 'to ') + stageText(b.stage)); }
     return 'You marked this done ' + was.join(' ') + '. Since then you switched ' + now.join(' ') + ', so its results may need updating. Look over the prompt for anything that changes, then confirm.';
   }
-  function doneBox(key, label){
+  function doneBox(key, label, ctx){
     var rv = REVIEW_BY[key] ? '<div class="sreview" data-rv="' + esc(key) + '"' + (needsReview(key) ? '' : ' hidden') + '><p id="rvp_' + esc(key) + '"><strong>Review needed.</strong> <span class="rv-why">' + (needsReview(key) ? esc(reviewWhy(key)) : '') + '</span></p><button class="btn small" type="button" data-reconfirm="' + esc(key) + '" aria-describedby="rvp_' + esc(key) + '">It’s still done</button></div>' : '';
-    return '<label class="sdone"><input type="checkbox" data-done="' + esc(key) + '"' + (state.done[key] ? ' checked' : '') + '><span>' + esc(label) + '</span></label>' + rv;
+    return '<label class="sdone"><input type="checkbox" data-done="' + esc(key) + '"' + (state.done[key] ? ' checked' : '') + '><span>' + esc(label) + (ctx ? '<span class="visually-hidden">: ' + esc(ctx) + '</span>' : '') + '</span></label>' + rv;
   }
   function backfillReview(){ Object.keys(REVIEW_BY).forEach(function(k){ if(state.done[k] && typeof state.doneVar[k] !== 'string') state.doneVar[k] = variantSig(k); }); }
   function updateReviews(){
@@ -1576,14 +1590,14 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     else if(!state.done.setup_home && docs < Math.ceil(totalDocs / 2)) next = {text:'Gather your documents: ' + docs + ' of ' + totalDocs + ' so far', step:'gather'};
     else if(!state.done.setup_home) next = {text:'Set up your household project', step:'create'};
     else if(!state.done.setup_review) next = {text:'Set up FI Review, your fresh-eyes reviewer', step:'create'};
-    else if(!state.done.setup_tests) next = {text:'Run the two tests before Session 1', step:'kickoff'};
+    else if(!state.done.setup_tests) next = {text:'Run the two tests before Session 1', step:'kickoff', at:'#tests'};
     else {
       var rvn = 0;
-      ss.forEach(function(x){ if(!x.optional) rvn++; if(!next && needsReview('s_' + x.key)) next = {text:'Review needed: ' + (x.optional ? 'Optional · ' : 'Session ' + rvn + ' · ') + x.title, step:'kickoff'}; });
+      ss.forEach(function(x){ if(!x.optional) rvn++; if(!next && needsReview('s_' + x.key)) next = {text:'Review needed: ' + (x.optional ? 'Optional · ' : 'Session ' + rvn + ' · ') + x.title, step:'kickoff', at:'#pc_' + x.key}; });
       ss.forEach(function(x){
-        if(x.optional){ if(!next && coreDone === core.length && !state.done['s_' + x.key]) next = {text:'Optional: ' + x.title, step:'kickoff'}; return; }
+        if(x.optional){ if(!next && coreDone === core.length && !state.done['s_' + x.key]) next = {text:'Optional: ' + x.title, step:'kickoff', at:'#pc_' + x.key}; return; }
         n++;
-        if(!next && !state.done['s_' + x.key]) next = {text:'Session ' + n + ' · ' + x.title, step:'kickoff'};
+        if(!next && !state.done['s_' + x.key]) next = {text:'Session ' + n + ' · ' + x.title, step:'kickoff', at:'#pc_' + x.key};
       });
       if(!next) next = {text:'You’re set up. Keep the rhythm: put the check-ins on your calendar', step:'running'};
     }
@@ -1621,6 +1635,8 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   function updateProgress(){
     $$('input[data-done]').forEach(function(inp){ inp.checked = !!state.done[inp.getAttribute('data-done')]; });
     updateReviews();
+    var kn = $('#kickNext');
+    if(kn){ var ks = progressStats().next; var on = !!ks && ks.step === 'kickoff' && !!ks.at; kn.hidden = !on; if(on){ $('#kickNextText').textContent = ks.text; $('#kickNextGo').setAttribute('data-jump', ks.at); } }
     var pp = $('#progressPanel'); if(!pp || pp.hidden || !pp.childElementCount) return;
     var st = progressStats();
     var put = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; };
@@ -1762,7 +1778,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     L.push('');
     L.push('1. Start a new chat in your household project. ' + aiObj().cal);
     if(c.attach) L.push('2. Have ready: ' + c.attach);
-    L.push((c.attach ? '3' : '2') + '. Paste the prompt' + (fits ? ' below.' : ' from the guide’s Keep going page.'));
+    L.push((c.attach ? '3' : '2') + '. Paste the prompt' + (fits ? ' below.' : ' from the guide’s Keep it running page.'));
     if(c.done) L.push('Done when: ' + c.done);
     if(fits){ L.push(''); L.push(pr); }
     return L.join('\n');
@@ -2309,6 +2325,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
     if(!el) return;
     var d = el.tagName === 'DETAILS' ? el : (el.classList && el.classList.contains('bucket') ? el.querySelector('details') : null);
     if(d) d.open = true;
+    for(var up = el.parentElement; up; up = up.parentElement){ if(up.tagName === 'DETAILS') up.open = true; } /* folded reference sections open on the way in */
     var reduce = false; try{ reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
     var to = el.id === 'startTitle' ? document.documentElement : el; /* Back to the top: the very top of the page */
     try{ to.scrollIntoView({block:'start', behavior:(smooth && !reduce) ? 'smooth' : 'auto'}); }catch(e){ try{ to.scrollIntoView(); }catch(x){} }
@@ -2499,7 +2516,7 @@ Walk us through what it changes: cash flow and savings, insurance, beneficiaries
   function buildLockdown(){
     var host = $('#lkGroups'); if(!host) return;
     host.innerHTML = LOCK.map(function(g){
-      return '<div class="check-group lk-group"><h3><span class="gt"><span class="gdisc ' + g.disc + '">' + ico(g.icon) + '</span><span>' + esc(g.title) + '</span></span><span class="count" data-lkcount="' + g.id + '"></span></h3>' +
+      return '<div class="check-group lk-group"><h2 class="h3"><span class="gt"><span class="gdisc ' + g.disc + '">' + ico(g.icon) + '</span><span>' + esc(g.title) + '</span></span><span class="count" data-lkcount="' + g.id + '"></span></h2>' +
         '<p class="lk-intro">' + esc(g.intro) + '</p>' +
         g.items.map(function(it){
           return '<div class="lk-item" data-lkitem="' + it.id + '"><label class="lk-check"><input type="checkbox" data-lock="' + it.id + '"><span class="lk-title">' + esc(it.t) + '</span>' + (it.time ? '<span class="lk-time">' + esc(it.time) + '</span>' : '') + '</label>' +
